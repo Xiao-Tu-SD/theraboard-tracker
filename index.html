@@ -1,0 +1,547 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+</head>
+<body>
+<title>TheraBoard Build Tracker</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a sticky tab bar over five pages (overview, steps, parts, doctor, flow); one page shows at a time. */
+:root {
+  --bg: #f6f5f2; --surface: #ffffff; --ink: #1d2126; --muted: #646b73; --line: #e2e0da;
+  --accent: #e2611c; --accent-soft: #fbe6da;
+  --good: #2f8a4c; --good-soft: #e1f2e6; --warn: #b7791f; --warn-soft: #fbf0d9;
+  --bad: #c0392b; --bad-soft: #f8e1de; --todo-soft: #eceae5;
+  --font-display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --font-body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #15181b; --surface: #1d2125; --ink: #ecebe7; --muted: #a2a8ae; --line: #30353a;
+    --accent: #f07a3a; --accent-soft: #3a2619;
+    --good: #5cc07a; --good-soft: #1d3324; --warn: #e0a64a; --warn-soft: #3a2f1a;
+    --bad: #ef7b6c; --bad-soft: #3d1f1b; --todo-soft: #2a2e33;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #15181b; --surface: #1d2125; --ink: #ecebe7; --muted: #a2a8ae; --line: #30353a;
+  --accent: #f07a3a; --accent-soft: #3a2619;
+  --good: #5cc07a; --good-soft: #1d3324; --warn: #e0a64a; --warn-soft: #3a2f1a;
+  --bad: #ef7b6c; --bad-soft: #3d1f1b; --todo-soft: #2a2e33;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 15px; line-height: 1.55; padding-block: 0 48px; }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--surface); }
+.gutter { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+.inner { max-width: 900px; margin: 0 auto; }
+h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; }
+h1 { font-size: clamp(24px, 5vw, 32px); font-weight: 800; }
+h2 { font-size: 22px; font-weight: 800; }
+h3 { font-size: 16px; font-weight: 600; }
+p { margin: 0; max-width: 68ch; }
+.eyebrow { font-family: var(--font-mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); }
+.muted { color: var(--muted); }
+.mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+
+/* Top bar + tabs */
+.topbar { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--surface); border-bottom: 1px solid var(--line); }
+.brand { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; padding-block: 14px 8px; }
+.brand b { font-family: var(--font-display); font-weight: 800; font-size: 18px; }
+nav { display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; }
+nav a { flex: none; text-decoration: none; color: var(--muted); font-size: 14px; font-weight: 500; padding: 8px 12px 10px; border-bottom: 2px solid transparent; }
+nav a[aria-current="page"] { color: var(--ink); border-bottom-color: var(--accent); }
+nav a:focus-visible, button:focus-visible, select:focus-visible, textarea:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+main { padding-block: 24px; }
+.page { display: grid; gap: 20px; }
+.page:not(.active) { visibility: hidden; height: 0; overflow: hidden; position: absolute; left: 0; right: 0; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 18px; display: grid; gap: 10px; min-width: 0; }
+.grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+@media (max-width: 640px) { .grid2 { grid-template-columns: minmax(0, 1fr); } }
+ul.clean { margin: 0; padding-left: 18px; display: grid; gap: 4px; }
+.notice { font-size: 13px; padding: 10px 12px; border-radius: 8px; background: var(--accent-soft); }
+
+/* Progress tiles */
+.tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+@media (max-width: 560px) { .tiles { grid-template-columns: minmax(0, 1fr); } }
+.tile { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px; display: grid; gap: 8px; }
+.tile b { font-family: var(--font-display); font-size: 26px; font-weight: 800; line-height: 1; }
+.bar { height: 8px; background: var(--todo-soft); border-radius: 99px; overflow: hidden; }
+.bar i { display: block; height: 100%; background: var(--good); transition: width .4s ease; }
+
+/* Steps */
+.step { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.step summary { list-style: none; cursor: pointer; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 14px 16px; }
+.step summary::-webkit-details-marker { display: none; }
+.num { font-family: var(--font-mono); font-size: 13px; width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center; background: var(--todo-soft); color: var(--muted); }
+.step[data-status="done"] .num { background: var(--good-soft); color: var(--good); }
+.step[data-status="doing"] .num { background: var(--warn-soft); color: var(--warn); }
+.step[data-status="blocked"] .num { background: var(--bad-soft); color: var(--bad); }
+.step .head { min-width: 0; }
+.step .head small { display: block; color: var(--muted); font-size: 12px; }
+.pill { font-size: 12px; font-weight: 600; padding: 3px 10px; border-radius: 99px; white-space: nowrap; }
+.pill.todo { background: var(--todo-soft); color: var(--muted); }
+.pill.doing { background: var(--warn-soft); color: var(--warn); }
+.pill.done { background: var(--good-soft); color: var(--good); }
+.pill.blocked { background: var(--bad-soft); color: var(--bad); }
+.step .body { border-top: 1px solid var(--line); padding: 16px; display: grid; gap: 14px; }
+.label { font-family: var(--font-mono); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.parts-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.parts-chips span { font-size: 13px; background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 2px 8px; }
+.checkline { padding: 10px 12px; border-left: 3px solid var(--good); background: var(--good-soft); border-radius: 0 6px 6px 0; font-size: 14px; }
+.track { display: grid; gap: 8px; }
+.row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+select, textarea, input[type="text"], input[type="date"] { font: inherit; font-size: 14px; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; }
+textarea { width: 100%; min-height: 76px; resize: vertical; }
+.btn { font: inherit; font-size: 13px; font-weight: 600; background: var(--accent); color: #fff; border: 0; border-radius: 6px; padding: 7px 14px; cursor: pointer; }
+.btn:disabled, select:disabled, textarea:disabled, input:disabled { opacity: .55; cursor: not-allowed; }
+.saved { font-size: 12px; color: var(--muted); }
+
+/* Parts table */
+.tablewrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: 14px; min-width: 560px; }
+th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-family: var(--font-mono); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); font-weight: 500; }
+tr:last-child td { border-bottom: 0; }
+td.num-c { font-variant-numeric: tabular-nums; white-space: nowrap; }
+a { color: var(--accent); }
+input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--good); }
+
+/* Doctor */
+.qgroup { display: grid; gap: 12px; }
+.q { display: grid; gap: 6px; }
+.q label { font-weight: 500; }
+.q .why { font-size: 13px; color: var(--muted); }
+.flow { overflow-x: auto; }
+.flow pre.mermaid { margin: 0; background: transparent; text-align: center; }
+@media (prefers-reduced-motion: reduce) { .bar i { transition: none; } }
+</style>
+
+<div class="topbar gutter">
+  <div class="inner">
+    <div class="brand"><b>TheraBoard</b><span class="mono muted" id="dayLabel">Day 1 of 30</span></div>
+    <nav aria-label="Pages">
+      <a href="#overview" data-page="overview">Overview</a>
+      <a href="#steps" data-page="steps">Steps</a>
+      <a href="#parts" data-page="parts">Components</a>
+      <a href="#doctor" data-page="doctor">Doctor questions</a>
+      <a href="#flow" data-page="flow">Flowchart</a>
+    </nav>
+  </div>
+</div>
+
+<main class="gutter"><div class="inner" style="position:relative">
+  <div id="notice" class="notice" hidden style="margin-bottom:16px"></div>
+
+  <!-- OVERVIEW -->
+  <section class="page" id="page-overview">
+    <div style="display:grid;gap:8px">
+      <div class="eyebrow">Project overview</div>
+      <h1>Smart shape-sorting board for hand and memory therapy</h1>
+    </div>
+    <div class="tiles">
+      <div class="tile"><span class="muted">Build steps done</span><b class="mono" id="tStepsN">0 / 14</b><div class="bar"><i id="tStepsBar" style="width:0"></i></div></div>
+      <div class="tile"><span class="muted">Components bought</span><b class="mono" id="tPartsN">0 / 0</b><div class="bar"><i id="tPartsBar" style="width:0"></i></div></div>
+      <div class="tile"><span class="muted">Doctor questions answered</span><b class="mono" id="tDocN">0 / 0</b><div class="bar"><i id="tDocBar" style="width:0"></i></div></div>
+    </div>
+    <div class="card">
+      <h3>Project description</h3>
+      <p>We are building a 12-hole interactive board for therapy. Holes in three shapes (circle, square, triangle) light up in a colour. The patient picks the matching piece and places it in the lit hole. A hidden magnet in each piece is sensed by a hall sensor under the hole, so the board knows when the piece is placed and how long it took.</p>
+      <p>The board gives voice feedback, shows the score on a small screen, and saves each session. A therapist can open a web page on a phone to see results over time.</p>
+    </div>
+    <div class="grid2">
+      <div class="card">
+        <h3>Problem it solves</h3>
+        <ul class="clean">
+          <li>Normal shape sorters don't measure anything, so progress is judged by eye.</li>
+          <li>Patients find repetitive exercises boring and stop practising.</li>
+          <li>Therapists have no simple record of speed and accuracy across sessions.</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>Who it helps</h3>
+        <ul class="clean">
+          <li>Stroke survivors relearning hand control</li>
+          <li>Children with cerebral palsy, autism or ADHD</li>
+          <li>Older adults with memory problems</li>
+          <li>Occupational therapists and physiotherapists</li>
+        </ul>
+      </div>
+    </div>
+    <div class="card">
+      <h3>Expected outcome (by 17 Nov 2026)</h3>
+      <ul class="clean">
+        <li><b>Working prototype:</b> 12 holes that light up and detect pieces reliably.</li>
+        <li><b>Three therapy modes:</b> colour match, reaction time, and memory sequence.</li>
+        <li><b>Feedback:</b> voice prompts, score on the screen, and lights that turn green when correct.</li>
+        <li><b>Results page:</b> a phone web page showing each session's time and accuracy.</li>
+        <li><b>Evidence:</b> tested with 3–5 people, plus feedback from at least one doctor or therapist.</li>
+        <li><b>Documents:</b> report, circuit diagram, demo video and presentation.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>Team roles</h3>
+      <div class="grid2" style="gap:6px 14px">
+        <div><b>A</b> · Electronics, wiring, power</div>
+        <div><b>B</b> · Firmware and game logic</div>
+        <div><b>C</b> · Laser cutting, 3D printing, assembly</div>
+        <div><b>D</b> · Dashboard, testing, report</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- STEPS -->
+  <section class="page" id="page-steps">
+    <div style="display:grid;gap:8px">
+      <div class="eyebrow">Build steps</div>
+      <h2>14 steps from parts to demo</h2>
+      <p class="muted">Open a step to see what to do and which parts it needs. Set its status and write what was done or what is stuck, then press Save.</p>
+    </div>
+    <div class="row" role="group" aria-label="Filter steps">
+      <select id="stepFilter" aria-label="Show steps">
+        <option value="all">All steps</option>
+        <option value="open">Not done yet</option>
+        <option value="blocked">Blocked</option>
+        <option value="done">Done</option>
+      </select>
+    </div>
+    <div id="stepList" style="display:grid;gap:10px"></div>
+  </section>
+
+  <!-- PARTS -->
+  <section class="page" id="page-parts">
+    <div style="display:grid;gap:8px">
+      <div class="eyebrow">Components</div>
+      <h2>Parts list</h2>
+      <p class="muted">Tick each part when it has arrived. Costs are approximate; check the store before ordering.</p>
+    </div>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Got it</th><th>Part</th><th>Qty</th><th>Used in step</th><th>Approx. ₹</th><th>Buy</th></tr></thead>
+        <tbody id="partRows"></tbody>
+      </table>
+    </div>
+    <p class="muted mono" id="partTotal"></p>
+  </section>
+
+  <!-- DOCTOR -->
+  <section class="page" id="page-doctor">
+    <div style="display:grid;gap:8px">
+      <div class="eyebrow">Doctor / therapist questionnaire</div>
+      <h2>Questions to ask before and after building</h2>
+      <p class="muted">Take this to an occupational therapist, physiotherapist or rehab doctor. Type their answers in the boxes and press Save under each one. Don't write any patient's name or personal details here.</p>
+    </div>
+    <div class="card">
+      <h3>Visit details</h3>
+      <div class="grid2">
+        <div class="q"><label for="v-name">Doctor or therapist name</label><input type="text" id="v-name"></div>
+        <div class="q"><label for="v-place">Hospital / clinic</label><input type="text" id="v-place"></div>
+        <div class="q"><label for="v-role">Speciality</label><input type="text" id="v-role" placeholder="e.g. Occupational therapist"></div>
+        <div class="q"><label for="v-date">Date of visit</label><input type="date" id="v-date"></div>
+      </div>
+      <div class="row"><button class="btn" id="v-save">Save visit details</button><span class="saved" id="v-saved"></span></div>
+    </div>
+    <div id="qList" style="display:grid;gap:16px"></div>
+  </section>
+
+  <!-- FLOW -->
+  <section class="page" id="page-flow">
+    <div style="display:grid;gap:8px">
+      <div class="eyebrow">Flowchart</div>
+      <h2>How the build flows</h2>
+      <p class="muted">Each test loops back until it passes. Electronics and the body are built side by side and meet at assembly.</p>
+    </div>
+    <div class="card flow">
+<pre class="mermaid">
+flowchart TD
+  P["1. Order parts"] --> S["2. Software setup"]
+  P --> D["8. Cut plate + print pieces"]
+  S --> B["3. Blink test"]
+  B --> L["4. Light one hole"]
+  L --> H["5. Detect one piece"]
+  H --> O["6. One-hole unit"]
+  O --> T1{"Piece detected?"}
+  T1 -- No --> F1["Check wiring, gap under 5 mm"] --> H
+  T1 -- Yes --> M["7. Multiplexer: 12 holes"]
+  M --> T2{"All 12 work?"}
+  T2 -- No --> F2["Check power, ground, capacitor"] --> M
+  T2 -- Yes --> MT["9. Mount hardware"]
+  D --> MT
+  MT --> U["10. Display, buttons, voice"]
+  U --> G["11. Game modes"]
+  G --> W["12. Web dashboard"]
+  W --> A["13. Final assembly + user test"]
+  A --> T3{"Test OK?"}
+  T3 -- No --> F3["Fix bugs"] --> G
+  T3 -- Yes --> R["14. Report + demo"]
+</pre>
+    </div>
+  </section>
+</div></main>
+
+<script>
+(function () {
+  /* ---------- Static project content ---------- */
+  const PARTS = [
+    { id: "p01", name: "ESP32 dev board (38-pin)", qty: "2 (1 spare)", step: "s02", cost: 800, url: "https://robu.in/product/esp32-38pin-development-board-wifibluetooth-ultra-low-power-consumption-dual-core" },
+    { id: "p02", name: "Micro-USB data cable", qty: "1", step: "s02", cost: 100 },
+    { id: "p03", name: "WS2812B LED strip, 60 LED/m", qty: "1 m (48 LEDs)", step: "s04", cost: 500, url: "https://probots.co.in/ws2812b-rgb-5v-flexible-led-strip-5m-5050-60-leds-per-meter-waterproof-ip65.html" },
+    { id: "p04", name: "330 Ω resistor + 1000 µF capacitor", qty: "1 each", step: "s04", cost: 30 },
+    { id: "p05", name: "5 V 3 A power adapter", qty: "1", step: "s04", cost: 350 },
+    { id: "p06", name: "A3144 hall effect sensor", qty: "20", step: "s05", cost: 400, url: "https://st.robu.in/product/hall-magnetic-sensor-module" },
+    { id: "p07", name: "10 kΩ resistors", qty: "20", step: "s05", cost: 40 },
+    { id: "p08", name: "Neodymium magnets 6×3 mm", qty: "30", step: "s05", cost: 300 },
+    { id: "p09", name: "CD74HC4067 16-channel MUX", qty: "1", step: "s07", cost: 120, url: "https://deepbluembedded.com/arduino-cd74hc4067-analog-multiplexer-library-code" },
+    { id: "p10", name: "Perfboard, jumper wires, headers", qty: "1 set", step: "s07", cost: 300 },
+    { id: "p11", name: "MDF or acrylic sheet, 3–5 mm (laser cut)", qty: "1 board", step: "s08", cost: 800 },
+    { id: "p12", name: "PLA filament / 3D print service", qty: "12 pieces", step: "s08", cost: 600 },
+    { id: "p13", name: "Frosted acrylic sheet (diffusers)", qty: "1", step: "s09", cost: 200 },
+    { id: "p14", name: "Hot glue / epoxy, screws, spacers", qty: "1 set", step: "s09", cost: 200 },
+    { id: "p15", name: "1.3\" OLED display (I2C)", qty: "1", step: "s10", cost: 350 },
+    { id: "p16", name: "Tactile push buttons with caps", qty: "6", step: "s10", cost: 100 },
+    { id: "p17", name: "DFPlayer Mini + microSD card", qty: "1 + 1", step: "s10", cost: 400, url: "https://wiki.dfrobot.com/dfr0299" },
+    { id: "p18", name: "3 W speaker + 1 kΩ resistor", qty: "1", step: "s10", cost: 120 }
+  ];
+  const STEPS = [
+    { id: "s01", week: 1, owner: "A", title: "Order all parts", what: "Order everything on the Components page on Day 1. Buy small items at Lamington Road if online delivery is slow.", parts: ["All parts on the Components page"], check: "Every part is received and counted against the list." },
+    { id: "s02", week: 1, owner: "B", title: "Set up the software", what: "Install Arduino IDE, add the ESP32 board package, and install the libraries: Adafruit NeoPixel, Adafruit SSD1306 + GFX, DFRobotDFPlayerMini, ESPAsyncWebServer + AsyncTCP.", parts: ["Laptop", "ESP32 dev board", "Micro-USB data cable"], check: "A blank sketch compiles for the ESP32 with all libraries included." },
+    { id: "s03", week: 1, owner: "B", title: "Blink test", what: "Upload a blink sketch and print a message on the Serial Monitor to confirm the board, cable and COM port work.", parts: ["ESP32 dev board", "Micro-USB data cable"], check: "The Serial Monitor prints the message and the board does not reset." },
+    { id: "s04", week: 1, owner: "A", title: "Light one hole", what: "Cut 4 LEDs off the strip. Connect 5 V and GND from the adapter, and DIN to GPIO 4 through the 330 Ω resistor. Put the 1000 µF capacitor across 5 V and GND. Light them red, green, then blue.", parts: ["4 WS2812B LEDs", "330 Ω resistor", "1000 µF capacitor", "5 V 3 A adapter"], check: "All 4 LEDs show red, green and blue in turn." },
+    { id: "s05", week: 1, owner: "A", title: "Detect one piece", what: "Power an A3144 from 5 V. Add a 10 kΩ pull-up from its output to 3.3 V and read it on a GPIO pin. The output goes LOW when a magnet is near. Measure the largest gap that still triggers.", parts: ["A3144 hall sensor", "10 kΩ resistor", "Neodymium magnet", "One test piece"], check: "The Serial Monitor shows 'placed' and 'removed' reliably, and the working gap is written in the notes." },
+    { id: "s06", week: 1, owner: "B", title: "Build the one-hole unit", what: "Combine steps 4 and 5: the hole lights blue, a piece is placed, the LEDs turn green and the time is printed.", parts: ["Setup from steps 4 and 5"], check: "Blue → place piece → green works 10 times in a row." },
+    { id: "s07", week: 2, owner: "A", title: "Connect all 12 sensors with the multiplexer", what: "Wire the CD74HC4067 at 3.3 V: S0–S3 to GPIO 13, 12, 14, 27 and SIG to GPIO 26. Connect sensor outputs to channels C0–C11. Chain all 48 LEDs on GPIO 4 and cap brightness at about 30%.", parts: ["CD74HC4067 MUX", "12 A3144 sensors", "12 × 10 kΩ resistors", "48 WS2812B LEDs", "Perfboard and jumper wires"], check: "Placing a magnet over any of the 12 sensors shows the correct hole number." },
+    { id: "s08", week: 1, owner: "C", title: "Cut the plate and print the pieces", what: "Draw the 3×4 top plate (40 mm circle, 38 mm square, 45 mm triangle) and box walls; laser cut them. 3D print 12 pieces with a 6×3 mm pocket underneath, glue a magnet in and seal it.", parts: ["MDF or acrylic sheet", "PLA filament / print service", "12 magnets", "Epoxy or hot glue"], check: "Every piece drops into its hole with 1–2 mm clearance and no magnet is exposed." },
+    { id: "s09", week: 2, owner: "C", title: "Mount the hardware", what: "Fix 4 LEDs and 1 sensor centred under each hole on a backing board, LED groups chained in order 1 to 12. Glue frosted acrylic discs into the holes.", parts: ["Backing board", "Frosted acrylic", "Hot glue, screws, spacers"], check: "With the plate on, all 12 holes light evenly and detect their piece." },
+    { id: "s10", week: 2, owner: "A", title: "Add display, buttons and voice", what: "OLED on I2C (SDA GPIO 21, SCL GPIO 22). Buttons on GPIO 32, 33, 25, 18, 19, 23 with INPUT_PULLUP. DFPlayer: GPIO 17 → RX through 1 kΩ, TX → GPIO 16, speaker on SPK1/SPK2. Save clips as 0001.mp3, 0002.mp3…", parts: ["OLED display", "6 buttons", "DFPlayer Mini + microSD", "Speaker", "1 kΩ resistor"], check: "The menu shows on the screen, every button responds, and 'Correct' plays through the speaker." },
+    { id: "s11", week: 3, owner: "B", title: "Write the game modes", what: "Match mode, reaction-time mode and memory-sequence mode (3–5 holes), chosen from the screen menu. Record each placement time with millis().", parts: ["Assembled board"], check: "All three modes play start to finish and show a score." },
+    { id: "s12", week: 3, owner: "D", title: "Build the web dashboard", what: "The ESP32 joins Wi-Fi (or makes its own hotspot) and serves a page with past sessions: date, mode, average time, correct and wrong. Save sessions in LittleFS.", parts: ["Assembled board", "Phone or laptop"], check: "A phone browser shows the last 5 sessions, and they are still there after a restart." },
+    { id: "s13", week: 4, owner: "C", title: "Final assembly and user testing", what: "Close the box, tidy cables, fix the power supply. Test with 3–5 people and, if possible, a therapist. Write down every problem.", parts: ["Finished board", "Feedback sheet (Doctor questions page)"], check: "At least 3 people have used it and the list of bugs is written in the notes." },
+    { id: "s14", week: 4, owner: "D", title: "Report and demo", what: "Fix the bugs found, then write the report with block and circuit diagrams, record a demo video and make the presentation.", parts: ["Photos and test results", "Circuit diagram"], check: "Report, video and slides are ready and the demo works on the first try." }
+  ];
+  const QUESTIONS = [
+    { group: "About the patients", items: [
+      { id: "q01", q: "Which patients would benefit most from this board (stroke, cerebral palsy, autism, ADHD, dementia, others)?", why: "Decides which game modes matter most." },
+      { id: "q02", q: "What age range and level of hand function should it be designed for?", why: "Sets piece size, weight and difficulty." },
+      { id: "q03", q: "What problems do patients have with the shape sorters or peg boards you use today?", why: "Shows what our board must do better." } ] },
+    { group: "Using it in therapy", items: [
+      { id: "q04", q: "Which therapy goals should it support: grip, hand–eye coordination, attention, memory, or others?", why: "Links each mode to a clinical goal." },
+      { id: "q05", q: "How long is a typical session, and how many sessions per week?", why: "Sets session length and battery needs." },
+      { id: "q06", q: "Should the patient use one hand, both hands, or switch? Should the board record which hand was used?", why: "Important for one-sided weakness after stroke." },
+      { id: "q07", q: "How should difficulty increase as the patient improves (more holes, less time, longer sequences)?", why: "Guides the levels in the game modes." } ] },
+    { group: "Design and comfort", items: [
+      { id: "q08", q: "Are our piece sizes (about 30–35 mm) and weights easy to hold for patients with weak grip?", why: "Avoids pieces that are too small or heavy." },
+      { id: "q09", q: "Are flashing or bright lights a problem for any patients (for example epilepsy or light sensitivity)? What brightness is safe?", why: "Safety for light-sensitive patients." },
+      { id: "q10", q: "Which languages should the voice prompts use, and should sound be optional?", why: "Hindi, Marathi or English; some children dislike loud sounds." },
+      { id: "q11", q: "Is the board size and hole spacing right for a therapy table and a seated patient?", why: "Reach and posture." } ] },
+    { group: "Measuring progress", items: [
+      { id: "q12", q: "Which numbers matter most to you: reaction time, accuracy, time to finish, or number of errors?", why: "Decides what the dashboard shows first." },
+      { id: "q13", q: "Which standard tests do you use now (for example Box and Block Test or Nine-Hole Peg Test)? Should our results be comparable?", why: "Makes the data meaningful to clinicians." },
+      { id: "q14", q: "How would you like to see results: after each session, weekly, or as a printed report?", why: "Shapes the web dashboard." } ] },
+    { group: "Safety and hygiene", items: [
+      { id: "q15", q: "How must the board and pieces be cleaned between patients? Which cleaning liquids are used?", why: "Choose materials that survive disinfecting." },
+      { id: "q16", q: "Do you see any safety risks: small parts, magnets, sharp edges, battery heat, cables?", why: "Fix risks before testing with patients." } ] },
+    { group: "Testing and use", items: [
+      { id: "q17", q: "Could we test the prototype with a few patients under your supervision? What consent is needed?", why: "Needed for real feedback; follow the hospital's rules." },
+      { id: "q18", q: "What would make you choose this board over your current tools? What price would a clinic pay?", why: "Tells us if the idea is worth taking further." },
+      { id: "q19", q: "Any other features you would want (timer, patient profiles, home-therapy version)?", why: "Ideas for the next version." } ] }
+  ];
+  const STATUS = { todo: "To do", doing: "In progress", blocked: "Blocked", done: "Done" };
+  const START = new Date(2026, 9, 19);
+
+  /* ---------- State ---------- */
+  let progress = {}, parts = {}, answers = {}, visit = {};
+  let db = null, readOnly = true;
+  const $ = id => document.getElementById(id);
+  const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const day = Math.floor((today - START) / 864e5) + 1;
+  $("dayLabel").textContent = day > 30 ? "Deadline passed (17 Nov)" : "Day " + Math.max(1, day) + " of 30";
+
+  function notice(msg) { $("notice").textContent = msg || ""; $("notice").hidden = !msg; }
+  function stamp(iso) { if (!iso) return ""; const d = new Date(iso); return "Saved " + d.toLocaleDateString("en-IN", { day: "numeric", month: "short" }) + ", " + d.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" }); }
+
+  /* ---------- Pages ---------- */
+  const PAGES = ["overview", "steps", "parts", "doctor", "flow"];
+  function show(page) {
+    if (!PAGES.includes(page)) page = "overview";
+    PAGES.forEach(p => $("page-" + p).classList.toggle("active", p === page));
+    document.querySelectorAll("nav a").forEach(a => a.setAttribute("aria-current", a.dataset.page === page ? "page" : "false"));
+    try { localStorage.setItem("tb-page", page); } catch (_) {}
+  }
+  document.querySelector("nav").addEventListener("click", e => {
+    const a = e.target.closest("a"); if (!a) return;
+    e.preventDefault(); show(a.dataset.page);
+    try { history.replaceState(null, "", "#" + a.dataset.page); } catch (_) {}
+    window.scrollTo(0, 0);
+  });
+  let startPage = (location.hash || "").slice(1);
+  if (!PAGES.includes(startPage)) { try { startPage = localStorage.getItem("tb-page") || "overview"; } catch (_) { startPage = "overview"; } }
+  show(startPage);
+
+  /* ---------- Steps ---------- */
+  function buildSteps() {
+    const list = $("stepList");
+    STEPS.forEach((s, i) => {
+      const d = document.createElement("details"); d.className = "step"; d.id = "step-" + s.id;
+      d.innerHTML =
+        '<summary><span class="num">' + (i + 1) + '</span><span class="head"><span class="t"></span><small>Week ' + s.week + ' · Owner ' + s.owner + '</small></span><span class="pill todo">To do</span></summary>' +
+        '<div class="body">' +
+          '<div><div class="label">What to do</div><p class="what"></p></div>' +
+          '<div><div class="label">Components needed</div><div class="parts-chips"></div></div>' +
+          '<div><div class="label">How to know it is done</div><div class="checkline"></div></div>' +
+          '<div class="track"><div class="label">Progress</div>' +
+            '<div class="row"><select id="st-' + s.id + '" aria-label="Status">' + Object.keys(STATUS).map(k => '<option value="' + k + '">' + STATUS[k] + '</option>').join("") + '</select></div>' +
+            '<textarea id="nt-' + s.id + '" placeholder="What is done, what is left, or what is stuck…" aria-label="Notes for step ' + (i + 1) + '"></textarea>' +
+            '<div class="row"><button class="btn" id="sv-' + s.id + '">Save</button><span class="saved" id="sd-' + s.id + '"></span></div>' +
+          '</div>' +
+        '</div>';
+      d.querySelector(".t").textContent = s.title;
+      d.querySelector(".what").textContent = s.what;
+      d.querySelector(".checkline").textContent = s.check;
+      const chips = d.querySelector(".parts-chips");
+      s.parts.forEach(p => { const c = document.createElement("span"); c.textContent = p; chips.appendChild(c); });
+      list.appendChild(d);
+      d.querySelector("#sv-" + s.id).addEventListener("click", () => saveStep(s.id));
+      d.querySelector("#st-" + s.id).addEventListener("change", () => saveStep(s.id));
+    });
+    $("stepFilter").addEventListener("change", renderSteps);
+  }
+  function renderSteps() {
+    const f = $("stepFilter").value;
+    STEPS.forEach(s => {
+      const p = progress[s.id] || {}; const st = STATUS[p.status] ? p.status : "todo";
+      const d = $("step-" + s.id);
+      d.dataset.status = st;
+      const pill = d.querySelector(".pill"); pill.className = "pill " + st; pill.textContent = STATUS[st];
+      const sel = $("st-" + s.id); if (document.activeElement !== sel) sel.value = st;
+      const nt = $("nt-" + s.id); if (document.activeElement !== nt && nt.dataset.dirty !== "1") nt.value = p.notes || "";
+      $("sd-" + s.id).textContent = stamp(p.updatedAt);
+      d.hidden = !(f === "all" || (f === "open" && st !== "done") || f === st);
+    });
+  }
+  async function saveStep(id) {
+    if (!db || readOnly) return;
+    const nt = $("nt-" + id);
+    const data = { status: $("st-" + id).value, notes: nt.value.slice(0, 4000), updatedAt: new Date().toISOString() };
+    try { await db.doc("progress/" + id).set(data); nt.dataset.dirty = "0"; }
+    catch (e) { writeError(e); }
+  }
+
+  /* ---------- Parts ---------- */
+  function buildParts() {
+    const body = $("partRows");
+    const stepNo = id => STEPS.findIndex(s => s.id === id) + 1;
+    PARTS.forEach(p => {
+      const tr = document.createElement("tr");
+      tr.innerHTML = '<td><input type="checkbox" id="pt-' + p.id + '" aria-label="Got ' + esc(p.name) + '"></td><td></td><td class="num-c"></td><td class="num-c"></td><td class="num-c mono"></td><td></td>';
+      tr.children[1].textContent = p.name;
+      tr.children[2].textContent = p.qty;
+      tr.children[3].textContent = "Step " + stepNo(p.step);
+      tr.children[4].textContent = "₹" + p.cost.toLocaleString("en-IN");
+      if (p.url) { const a = document.createElement("a"); a.href = p.url; a.target = "_blank"; a.rel = "noopener"; a.textContent = "Link"; tr.children[5].appendChild(a); }
+      else tr.children[5].innerHTML = '<span class="muted">Local shop</span>';
+      body.appendChild(tr);
+      tr.querySelector("input").addEventListener("change", async e => {
+        if (!db || readOnly) return;
+        try { await db.doc("parts/" + p.id).set({ bought: e.target.checked, updatedAt: new Date().toISOString() }); }
+        catch (err) { writeError(err); }
+      });
+    });
+    const total = PARTS.reduce((a, p) => a + p.cost, 0);
+    $("partTotal").textContent = "Approximate total: ₹" + total.toLocaleString("en-IN") + " (plus spares and delivery)";
+  }
+  function renderParts() { PARTS.forEach(p => { $("pt-" + p.id).checked = !!(parts[p.id] && parts[p.id].bought); }); }
+
+  /* ---------- Doctor ---------- */
+  function buildDoctor() {
+    const list = $("qList"); let n = 0;
+    QUESTIONS.forEach(g => {
+      const card = document.createElement("div"); card.className = "card qgroup";
+      const h = document.createElement("h3"); h.textContent = g.group; card.appendChild(h);
+      g.items.forEach(item => {
+        n++;
+        const q = document.createElement("div"); q.className = "q";
+        q.innerHTML = '<label for="an-' + item.id + '"></label><span class="why"></span><textarea id="an-' + item.id + '" placeholder="Doctor\'s answer…"></textarea><div class="row"><button class="btn" id="as-' + item.id + '">Save answer</button><span class="saved" id="ad-' + item.id + '"></span></div>';
+        q.querySelector("label").textContent = n + ". " + item.q;
+        q.querySelector(".why").textContent = "Why we ask: " + item.why;
+        card.appendChild(q);
+        q.querySelector("button").addEventListener("click", async () => {
+          if (!db || readOnly) return;
+          const ta = $("an-" + item.id);
+          try { await db.doc("answers/" + item.id).set({ text: ta.value.slice(0, 4000), updatedAt: new Date().toISOString() }); ta.dataset.dirty = "0"; }
+          catch (e) { writeError(e); }
+        });
+      });
+      list.appendChild(card);
+    });
+    $("v-save").addEventListener("click", async () => {
+      if (!db || readOnly) return;
+      const data = { name: $("v-name").value.slice(0, 200), place: $("v-place").value.slice(0, 200), role: $("v-role").value.slice(0, 200), date: $("v-date").value, updatedAt: new Date().toISOString() };
+      try { await db.doc("meta/visit").set(data); } catch (e) { writeError(e); }
+    });
+  }
+  function renderDoctor() {
+    QUESTIONS.forEach(g => g.items.forEach(item => {
+      const a = answers[item.id] || {}; const ta = $("an-" + item.id);
+      if (document.activeElement !== ta && ta.dataset.dirty !== "1") ta.value = a.text || "";
+      $("ad-" + item.id).textContent = stamp(a.updatedAt);
+    }));
+    [["v-name", "name"], ["v-place", "place"], ["v-role", "role"], ["v-date", "date"]].forEach(([id, k]) => { if (document.activeElement !== $(id)) $(id).value = visit[k] || ""; });
+    $("v-saved").textContent = stamp(visit.updatedAt);
+  }
+
+  /* ---------- Overview tiles ---------- */
+  function renderOverview() {
+    const sDone = STEPS.filter(s => progress[s.id] && progress[s.id].status === "done").length;
+    const pDone = PARTS.filter(p => parts[p.id] && parts[p.id].bought).length;
+    const qTotal = QUESTIONS.reduce((a, g) => a + g.items.length, 0);
+    const qDone = Object.keys(answers).filter(k => answers[k] && String(answers[k].text || "").trim()).length;
+    $("tStepsN").textContent = sDone + " / " + STEPS.length; $("tStepsBar").style.width = (sDone / STEPS.length * 100) + "%";
+    $("tPartsN").textContent = pDone + " / " + PARTS.length; $("tPartsBar").style.width = (pDone / PARTS.length * 100) + "%";
+    $("tDocN").textContent = qDone + " / " + qTotal; $("tDocBar").style.width = (qDone / qTotal * 100) + "%";
+  }
+  function renderAll() { renderSteps(); renderParts(); renderDoctor(); renderOverview(); }
+
+  /* ---------- Write handling ---------- */
+  document.addEventListener("input", e => { if (e.target.tagName === "TEXTAREA") e.target.dataset.dirty = "1"; });
+  function setReadOnly(v) {
+    readOnly = v;
+    document.querySelectorAll("main select:not(#stepFilter), main textarea, main input, main .btn").forEach(el => el.disabled = v);
+  }
+  function writeError(e) {
+    if (e && e.code === "invalid_argument") { setReadOnly(true); notice("You can view this tracker but not change it. Ask the owner to share it with you as a Contributor."); }
+    else if (e && e.code === "quota_exceeded") notice("The tracker's storage is full.");
+    else notice("That change didn't save. Check your connection and try again.");
+  }
+
+  buildSteps(); buildParts(); buildDoctor();
+  setReadOnly(true); renderAll();
+
+  (async () => {
+    const api = window.claude && window.claude.use ? window.claude : null;
+    db = api ? await api.use("db") : null;
+    if (!db) { notice("Open this page signed in to claude.ai to save progress, notes and answers."); return; }
+    const user = await api.use("user");
+    const canWrite = user && user.can ? await user.can("data.write") : null;
+    setReadOnly(canWrite === false);
+    if (canWrite === false) notice("You can view progress here. Ask the owner to share it with you as a Contributor to make changes.");
+    const toMap = snap => { const m = {}; snap.docs.forEach(d => { m[d.id] = d.data() || {}; }); return m; };
+    const onErr = () => notice("Live updates stopped. Reload the page to reconnect.");
+    db.collection("progress").onSnapshot(s => { progress = toMap(s); renderSteps(); renderOverview(); }, onErr);
+    db.collection("parts").onSnapshot(s => { parts = toMap(s); renderParts(); renderOverview(); }, onErr);
+    db.collection("answers").onSnapshot(s => { answers = toMap(s); renderDoctor(); renderOverview(); }, onErr);
+    db.doc("meta/visit").onSnapshot(s => { visit = s.exists ? (s.data() || {}) : {}; renderDoctor(); }, onErr);
+  })();
+})();
+</script>
+
+</body>
+</html>
